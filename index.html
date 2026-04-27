@@ -507,11 +507,15 @@ function initMap() {
       var cat = lib > 0.01 ? 'red' : lib < -0.01 ? 'green' : 'grey';
       var col = libColorByCat(cat);
       var m = L.circleMarker([p[1], p[2]], {
-        renderer: canvasRenderer,
-        radius: 3.5,
-        fillColor: col, color: col,
-        weight: 0, fillOpacity: 0.85
-      });
+  renderer: canvasRenderer,
+  radius: 4,
+  fillColor: col, color: col,
+  weight: 1,           // 1px outline expands clickable area
+  opacity: 0,          // outline invisible
+  fillOpacity: 0.85,
+  interactive: true,
+  bubblingMouseEvents: false
+});
       m._parcel = p;
       m._cat = cat;     // used by cluster icon function
       m.on('click', onMarkerClick);
