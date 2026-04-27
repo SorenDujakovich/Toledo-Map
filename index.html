@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Toledo — Split Rate Tax Liability Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0d0f14;--surface:#161a23;--surface2:#1e2330;
+  --border:#2a3045;--accent:#e8c84a;--text:#e8eaf0;
+  --text2:#8892a4;--green:#3ecf82;--red:#e85a4a;--grey:#555e72;
+  --mono:'DM Mono',monospace;--sans:'Syne',sans-serif;
+}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:var(--sans)}
+
+/* ── Loading ── */
+#loading{position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;
+  flex-direction:column;align-items:center;justify-content:center;gap:20px;transition:opacity 0.5s}
+.load-title{font-size:26px;font-weight:800;letter-spacing:-0.02em}
+.load-title span{color:var(--accent)}
+.load-bar-wrap{width:280px;height:3px;background:var(--surface2);border-radius:2px}
+.load-bar{height:100%;background:var(--accent);width:0%;transition:width 0.15s;border-radius:2px}
+.load-sub{font-family:var(--mono);font-size:11px;color:var(--text2)}
+.load-counts{display:flex;gap:24px;margin-top:4px}
+.lc{display:flex;flex-direction:column;align-items:center;gap:3px}
+.lc-val{font-family:var(--mono);font-size:16px;font-weight:500}
+.lc-lbl{font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--text2)}
+
+/* ── Header ── */
+header{height:52px;background:var(--surface);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;padding:0 20px;
+  position:relative;z-index:500;flex-shrink:0}
+.hlogo{display:flex;align-items:center;gap:12px}
+.hbadge{width:30px;height:30px;background:var(--accent);color:#0d0f14;
+  font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center}
+.htitle{font-size:14px;font-weight:700}
+.htitle span{color:var(--text2);font-weight:400}
+.hstats{display:flex;gap:24px}
+.hstat{display:flex;flex-direction:column;align-items:flex-end}
+.hstat-val{font-family:var(--mono);font-size:13px;color:var(--accent)}
+.hstat-lbl{font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:.08em}
+
+/* ── Layout ── */
+.layout{display:flex;height:calc(100vh - 52px)}
+
+/* ── Sidebar ── */
+.sidebar{width:290px;background:var(--surface);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;overflow:hidden;flex-shrink:0}
+.sb-section{padding:14px;border-bottom:1px solid var(--border)}
+.sb-section h2{font-size:9px;font-weight:600;text-transform:uppercase;
+  letter-spacing:.1em;color:var(--text2);margin-bottom:10px}
+
+/* Search */
+.search-wrap{position:relative}
+.search-wrap input{width:100%;background:var(--surface2);border:1px solid var(--border);
+  color:var(--text);font-family:var(--mono);font-size:12px;
+  padding:8px 12px 8px 30px;outline:none;transition:border-color .2s}
+.search-wrap input:focus{border-color:var(--accent)}
+.search-wrap input::placeholder{color:var(--text2)}
+.search-icon{position:absolute;left:9px;top:50%;transform:translateY(-50%);
+  color:var(--text2);font-size:14px}
+
+/* Summary cards */
+.sum-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+.sum-card{background:var(--surface2);border:1px solid var(--border);
+  padding:10px 8px;display:flex;flex-direction:column;align-items:center;gap:3px}
+.sum-dot{width:9px;height:9px;border-radius:50%;margin-bottom:2px}
+.sum-val{font-family:var(--mono);font-size:13px;font-weight:500}
+.sum-val.grn{color:var(--green)}.sum-val.red{color:var(--red)}.sum-val.gry{color:var(--grey)}
+.sum-lbl{font-size:9px;color:var(--text2);text-align:center;line-height:1.3}
+
+/* Filter toggle */
+.filter-btns{display:flex;gap:5px}
+.fbtn{flex:1;padding:7px 4px;background:transparent;border:1px solid var(--border);
+  color:var(--text2);font-family:var(--sans);font-size:10px;font-weight:700;cursor:pointer;
+  transition:all .15s;text-transform:uppercase;letter-spacing:.05em}
+.fbtn:hover{border-color:var(--accent);color:var(--text)}
+.fbtn.active-green{border-color:var(--green);color:var(--green);background:rgba(62,207,130,.07)}
+.fbtn.active-red{border-color:var(--red);color:var(--red);background:rgba(232,90,74,.07)}
+.fbtn.active-grey{border-color:var(--grey);color:var(--grey);background:rgba(85,94,114,.07)}
+.fbtn.active-all{border-color:var(--accent);color:var(--accent);background:rgba(232,200,74,.07)}
+
+/* Legend */
+.legend-rows{display:flex;flex-direction:column;gap:7px}
+.leg-row{display:flex;align-items:center;gap:9px;font-size:11px;font-family:var(--mono)}
+.leg-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.leg-desc{color:var(--text2);flex:1}
+.leg-count{font-size:10px;color:var(--text2);opacity:.6}
+
+/* Detail panel */
+.detail-scroll{flex:1;overflow-y:auto;padding:14px}
+.detail-scroll::-webkit-scrollbar{width:3px}
+.detail-scroll::-webkit-scrollbar-thumb{background:var(--border)}
+.no-sel{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  height:100%;gap:8px;color:var(--text2);text-align:center;padding:20px}
+.no-sel .icon{font-size:32px;opacity:.2}
+.no-sel p{font-size:12px;line-height:1.7;font-family:var(--mono)}
+#parcel-detail{display:none}
+.d-parcel-id{font-family:var(--mono);font-size:18px;font-weight:500;
+  color:var(--accent);margin-bottom:2px}
+.d-coords{font-family:var(--mono);font-size:10px;color:var(--text2);margin-bottom:14px}
+
+/* Liability badge */
+.liab-banner{border:1px solid;padding:12px 14px;margin-bottom:14px;
+  display:flex;justify-content:space-between;align-items:center}
+.liab-banner.grn{border-color:var(--green);background:rgba(62,207,130,.05)}
+.liab-banner.red{border-color:var(--red);background:rgba(232,90,74,.05)}
+.liab-banner.gry{border-color:var(--grey);background:rgba(85,94,114,.05)}
+.lb-label{font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--text2);margin-bottom:2px}
+.lb-desc{font-size:10px;color:var(--text2)}
+.lb-amount{font-family:var(--mono);font-size:22px;font-weight:500}
+.lb-amount.grn{color:var(--green)}.lb-amount.red{color:var(--red)}.lb-amount.gry{color:var(--grey)}
+
+/* Detail cards */
+.section-label{font-size:9px;text-transform:uppercase;letter-spacing:.1em;
+  color:var(--text2);margin:12px 0 7px}
+.d-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.d-card{background:var(--surface2);border:1px solid var(--border);padding:9px 10px}
+.d-card-lbl{font-size:9px;text-transform:uppercase;letter-spacing:.08em;
+  color:var(--text2);margin-bottom:3px}
+.d-card-val{font-family:var(--mono);font-size:13px;font-weight:500;color:var(--text)}
+.d-card-val.acc{color:var(--accent)}
+.d-card-val.grn{color:var(--green)}.d-card-val.red{color:var(--red)}
+
+/* Full-width card */
+.d-card-full{background:var(--surface2);border:1px solid var(--border);
+  padding:9px 10px;display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+
+/* Map */
+#map{flex:1}
+
+/* Clusters */
+.marker-cluster-small{background-color:rgba(255,255,255,.05)!important}
+.marker-cluster-small div{background-color:rgba(140,140,140,.5)!important;
+  color:#fff!important;font-family:var(--mono)!important;font-size:10px!important}
+.marker-cluster-medium{background-color:rgba(255,255,255,.04)!important}
+.marker-cluster-medium div{background-color:rgba(140,140,140,.45)!important;
+  color:#fff!important;font-family:var(--mono)!important;font-size:10px!important}
+.marker-cluster-large{background-color:rgba(255,255,255,.03)!important}
+.marker-cluster-large div{background-color:rgba(140,140,140,.4)!important;
+  color:#fff!important;font-family:var(--mono)!important;font-size:10px!important}
+
+/* Popup */
+.leaflet-popup-content-wrapper{background:var(--surface)!important;
+  border:1px solid var(--border)!important;border-radius:0!important;
+  box-shadow:0 8px 32px rgba(0,0,0,.7)!important;color:var(--text)!important}
+.leaflet-popup-tip{background:var(--surface)!important}
+.leaflet-popup-content{font-family:var(--mono)!important;font-size:11px!important;
+  margin:14px!important;min-width:200px!important}
+.popup-id{font-size:14px;font-weight:500;color:var(--accent);margin-bottom:10px}
+.popup-liab{padding:6px 10px;margin-bottom:10px;border:1px solid;font-size:12px;
+  display:flex;justify-content:space-between}
+.popup-liab.grn{border-color:var(--green);background:rgba(62,207,130,.07)}
+.popup-liab.red{border-color:var(--red);background:rgba(232,90,74,.07)}
+.popup-liab.gry{border-color:var(--grey);background:rgba(85,94,114,.07)}
+.popup-row{display:flex;justify-content:space-between;gap:10px;
+  padding:3px 0;border-bottom:1px solid var(--border);font-size:11px}
+.popup-row:last-child{border:none}
+.pk{color:var(--text2)}.pv{color:var(--text);font-weight:500}
+.pv.grn{color:var(--green)}.pv.red{color:var(--red)}.pv.gry{color:var(--grey)}.pv.acc{color:var(--accent)}
+
+.leaflet-control-zoom a{background:var(--surface)!important;
+  color:var(--text)!important;border-color:var(--border)!important}
+.leaflet-control-zoom a:hover{background:var(--surface2)!important;color:var(--accent)!important}
+</style>
+</head>
+<body>
+
+<div id="loading">
+  <div class="load-title">Toledo <span>Split Rate</span> Tax Map</div>
+  <div class="load-bar-wrap"><div class="load-bar" id="lb"></div></div>
+  <div class="load-sub" id="ls">Initialising…</div>
+  <div class="load-counts">
+    <div class="lc"><span class="lc-val" style="color:var(--green)" id="lc-green">—</span><span class="lc-lbl">Pay Less</span></div>
+    <div class="lc"><span class="lc-val" style="color:var(--red)"   id="lc-red">—</span><span class="lc-lbl">Pay More</span></div>
+    <div class="lc"><span class="lc-val" style="color:var(--grey)"  id="lc-grey">—</span><span class="lc-lbl">No Change</span></div>
+  </div>
+</div>
+
+<header>
+  <div class="hlogo">
+    <div class="hbadge">TC</div>
+    <div class="htitle">Toledo <span>/ Split Rate Tax Liability</span></div>
+  </div>
+  <div class="hstats">
+    <div class="hstat"><span class="hstat-val" id="st-total">—</span><span class="hstat-lbl">Total Parcels</span></div>
+    <div class="hstat"><span class="hstat-val" id="st-visible">—</span><span class="hstat-lbl">In View</span></div>
+    <div class="hstat"><span class="hstat-val" id="st-zoom">12</span><span class="hstat-lbl">Zoom</span></div>
+  </div>
+</header>
+
+<div class="layout">
+  <div class="sidebar">
+
+    <div class="sb-section">
+      <h2>Search Parcel ID</h2>
+      <div class="search-wrap">
+        <span class="search-icon">⌕</span>
+        <input type="text" id="search-input" placeholder="Enter parcel ID + Enter…">
+      </div>
+    </div>
+
+    <div class="sb-section">
+      <h2>Portfolio Summary</h2>
+      <div class="sum-grid">
+        <div class="sum-card">
+          <div class="sum-dot" style="background:var(--green)"></div>
+          <div class="sum-val grn" id="sum-green">—</div>
+          <div class="sum-lbl">Pay Less<br>(Green)</div>
+        </div>
+        <div class="sum-card">
+          <div class="sum-dot" style="background:var(--red)"></div>
+          <div class="sum-val red" id="sum-red">—</div>
+          <div class="sum-lbl">Pay More<br>(Red)</div>
+        </div>
+        <div class="sum-card">
+          <div class="sum-dot" style="background:var(--grey)"></div>
+          <div class="sum-val gry" id="sum-grey">—</div>
+          <div class="sum-lbl">No Change<br>(Grey)</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sb-section">
+      <h2>Filter by Outcome</h2>
+      <div class="filter-btns">
+        <button class="fbtn active-all" id="fbtn-all"   onclick="setFilter('all')">All</button>
+        <button class="fbtn" id="fbtn-green" onclick="setFilter('green')">🟢 Less</button>
+        <button class="fbtn" id="fbtn-red"   onclick="setFilter('red')">🔴 More</button>
+        <button class="fbtn" id="fbtn-grey"  onclick="setFilter('grey')">⚫ Same</button>
+      </div>
+    </div>
+
+    <div class="sb-section">
+      <h2>Legend</h2>
+      <div class="legend-rows">
+        <div class="leg-row">
+          <div class="leg-dot" style="background:#3ecf82"></div>
+          <span class="leg-desc">Tax decreases — land-heavy parcels benefit</span>
+        </div>
+        <div class="leg-row">
+          <div class="leg-dot" style="background:#e85a4a"></div>
+          <span class="leg-desc">Tax increases — improvement-heavy parcels</span>
+        </div>
+        <div class="leg-row">
+          <div class="leg-dot" style="background:#555e72"></div>
+          <span class="leg-desc">No meaningful change in liability</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="detail-scroll">
+      <div class="no-sel" id="no-sel">
+        <div class="icon">◎</div>
+        <p>Click any parcel<br>to inspect its<br>full tax breakdown</p>
+      </div>
+      <div id="parcel-detail">
+        <div class="d-parcel-id" id="d-id"></div>
+        <div class="d-coords" id="d-coords"></div>
+
+        <div class="liab-banner" id="liab-banner">
+          <div>
+            <div class="lb-label">Tax Liability Change</div>
+            <div class="lb-desc" id="d-liab-desc"></div>
+          </div>
+          <div class="lb-amount" id="d-liab-val"></div>
+        </div>
+
+        <div class="section-label">Assessed Value</div>
+        <div class="d-grid">
+          <div class="d-card">
+            <div class="d-card-lbl">Land Value</div>
+            <div class="d-card-val acc" id="d-land"></div>
+          </div>
+          <div class="d-card">
+            <div class="d-card-lbl">Building Value</div>
+            <div class="d-card-val" id="d-bldg"></div>
+          </div>
+          <div class="d-card">
+            <div class="d-card-lbl">Total Value</div>
+            <div class="d-card-val acc" id="d-total"></div>
+          </div>
+          <div class="d-card">
+            <div class="d-card-lbl">Parcel Type</div>
+            <div class="d-card-val" id="d-type"></div>
+          </div>
+        </div>
+
+        <div class="section-label">Tax Comparison</div>
+        <div class="d-card-full">
+          <div>
+            <div class="d-card-lbl">Current Uniform Tax</div>
+            <div class="d-card-val" id="d-uniform"></div>
+          </div>
+          <div style="text-align:right">
+            <div class="d-card-lbl">Split Rate Tax</div>
+            <div class="d-card-val" id="d-splitval"></div>
+          </div>
+        </div>
+
+        <div class="section-label">Split Rate Breakdown</div>
+        <div class="d-grid">
+          <div class="d-card">
+            <div class="d-card-lbl">Land Tax</div>
+            <div class="d-card-val" id="d-ltax"></div>
+          </div>
+          <div class="d-card">
+            <div class="d-card-lbl">Building Tax</div>
+            <div class="d-card-val" id="d-btax"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  <div id="map"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+<script>
+var allMarkers = [], map, cluster;
+var nGreen = 0, nRed = 0, nGrey = 0;
+var currentFilter = 'all';
+
+function fmt(n) {
+  if (n == null || n === 0) return '$0.00';
+  return '$' + Math.abs(Number(n)).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+function fmtV(n) {
+  if (n == null) return '—';
+  return '$' + Number(n).toLocaleString();
+}
+function sign(n) { return n >= 0 ? '+' : '−'; }
+
+function libClass(lib) {
+  if (lib > 0.01)  return 'red';
+  if (lib < -0.01) return 'grn';
+  return 'gry';
+}
+function libColor(lib) {
+  if (lib > 0.01)  return '#e85a4a';
+  if (lib < -0.01) return '#3ecf82';
+  return '#555e72';
+}
+function parcelType(land, bldg) {
+  if (bldg === 0)  return 'Land Only';
+  if (land === 0)  return 'Improvement';
+  return 'Land + Bldg';
+}
+
+function setFilter(f) {
+  currentFilter = f;
+  ['all','green','red','grey'].forEach(function(k) {
+    var el = document.getElementById('fbtn-' + k);
+    el.className = 'fbtn' + (k === f ? ' active-' + (k === 'all' ? 'all' : k) : '');
+  });
+  allMarkers.forEach(function(item) {
+    var lib = item.p[10];
+    var show = f === 'all'
+      || (f === 'green' && lib < -0.01)
+      || (f === 'red'   && lib >  0.01)
+      || (f === 'grey'  && lib >= -0.01 && lib <= 0.01);
+    if (show) {
+      if (!cluster.hasLayer(item.m)) cluster.addLayer(item.m);
+    } else {
+      if (cluster.hasLayer(item.m)) cluster.removeLayer(item.m);
+    }
+  });
+  updateStats();
+}
+
+function showDetail(p) {
+  document.getElementById('no-sel').style.display = 'none';
+  document.getElementById('parcel-detail').style.display = 'block';
+
+  var lib = p[10];
+  var cls = libClass(lib);
+
+  document.getElementById('d-id').textContent     = 'Parcel #' + p[0];
+  document.getElementById('d-coords').textContent = p[1].toFixed(6) + ', ' + p[2].toFixed(6);
+  document.getElementById('d-land').textContent   = fmtV(p[3]);
+  document.getElementById('d-bldg').textContent   = fmtV(p[4]);
+  document.getElementById('d-total').textContent  = fmtV(p[5]);
+  document.getElementById('d-type').textContent   = parcelType(p[3], p[4]);
+  document.getElementById('d-uniform').textContent = fmt(p[8]);
+  document.getElementById('d-splitval').textContent = fmt(p[9]);
+  document.getElementById('d-ltax').textContent   = fmt(p[6]);
+  document.getElementById('d-btax').textContent   = fmt(p[7]);
+
+  var banner = document.getElementById('liab-banner');
+  banner.className = 'liab-banner ' + cls;
+
+  var valEl = document.getElementById('d-liab-val');
+  valEl.textContent = (lib >= 0 ? '+' : '−') + fmt(lib);
+  valEl.className   = 'lb-amount ' + cls;
+
+  document.getElementById('d-liab-desc').textContent =
+    lib >  0.01 ? 'Pays MORE under split rate' :
+    lib < -0.01 ? 'Pays LESS under split rate' :
+                  'No change under split rate';
+}
+
+function popupHTML(p) {
+  var lib = p[10];
+  var cls = libClass(lib);
+  var libLabel = lib > 0.01 ? '▲ Pays More' : lib < -0.01 ? '▼ Pays Less' : '= No Change';
+  var libStr = (lib >= 0 ? '+' : '−') + fmt(lib);
+  return '<div class="popup-id">Parcel #' + p[0] + '</div>' +
+    '<div class="popup-liab ' + cls + '">' +
+      '<span class="p-k">' + libLabel + '</span>' +
+      '<strong class="pv ' + cls + '">' + libStr + '</strong>' +
+    '</div>' +
+    '<div class="popup-row"><span class="pk">Land Value</span><span class="pv acc">' + fmtV(p[3]) + '</span></div>' +
+    '<div class="popup-row"><span class="pk">Building Value</span><span class="pv">' + fmtV(p[4]) + '</span></div>' +
+    '<div class="popup-row"><span class="pk">Total Value</span><span class="pv">' + fmtV(p[5]) + '</span></div>' +
+    '<div class="popup-row"><span class="pk">Uniform Tax</span><span class="pv">' + fmt(p[8]) + '</span></div>' +
+    '<div class="popup-row"><span class="pk">Split Rate Tax</span><span class="pv">' + fmt(p[9]) + '</span></div>' +
+    '<div class="popup-row"><span class="pk">Land Tax</span><span class="pv">' + fmt(p[6]) + '</span></div>' +
+    '<div class="popup-row"><span class="pk">Building Tax</span><span class="pv">' + fmt(p[7]) + '</span></div>';
+}
+
+function updateStats() {
+  var bounds = map.getBounds(), count = 0;
+  allMarkers.forEach(function(item) {
+    if (bounds.contains([item.p[1], item.p[2]])) count++;
+  });
+  document.getElementById('st-visible').textContent = count.toLocaleString();
+  document.getElementById('st-zoom').textContent    = map.getZoom();
+}
+
+function initMap() {
+  document.getElementById('ls').textContent = 'Counting outcomes…';
+  document.getElementById('lb').style.width = '10%';
+
+  PARCEL_DATA.forEach(function(p) {
+    var lib = p[10];
+    if (lib > 0.01)       nRed++;
+    else if (lib < -0.01) nGreen++;
+    else                  nGrey++;
+  });
+
+  var total = PARCEL_DATA.length;
+  document.getElementById('st-total').textContent  = total.toLocaleString();
+  document.getElementById('sum-green').textContent = nGreen.toLocaleString();
+  document.getElementById('sum-red').textContent   = nRed.toLocaleString();
+  document.getElementById('sum-grey').textContent  = nGrey.toLocaleString();
+  document.getElementById('lc-green').textContent  = nGreen.toLocaleString();
+  document.getElementById('lc-red').textContent    = nRed.toLocaleString();
+  document.getElementById('lc-grey').textContent   = nGrey.toLocaleString();
+
+  map = L.map('map', {center:[41.6663,-83.5883], zoom:12, preferCanvas:true});
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution:'&copy; OpenStreetMap &copy; CartoDB', maxZoom:19
+  }).addTo(map);
+
+  cluster = L.markerClusterGroup({
+    maxClusterRadius: 45,
+    disableClusteringAtZoom: 16,
+    chunkedLoading: true,
+    chunkInterval: 80,
+    chunkDelay: 10,
+    iconCreateFunction: function(c) {
+      var n = c.getChildCount();
+      return L.divIcon({
+        html: '<div style="background:rgba(100,110,130,0.55);color:#fff;border-radius:50%;width:34px;height:34px;display:flex;align-items:center;justify-content:center;font-family:\'DM Mono\',monospace;font-size:10px;border:1px solid rgba(255,255,255,0.15)">' + (n>999?Math.round(n/1000)+'k':n) + '</div>',
+        className: '', iconSize: [34,34]
+      });
+    }
+  });
+
+  var i = 0, CHUNK = 3000;
+  function addChunk() {
+    var end = Math.min(i + CHUNK, total), batch = [];
+    for (; i < end; i++) {
+      var p = PARCEL_DATA[i];
+      var lib = p[10];
+      var col = libColor(lib);
+      var radius = 3.5;
+      var m = L.circleMarker([p[1], p[2]], {
+        radius: radius, fillColor: col, color: col,
+        weight: 0, fillOpacity: 0.85
+      });
+      (function(marker, parcel) {
+        marker.on('click', function() {
+          showDetail(parcel);
+          marker.bindPopup(popupHTML(parcel), {maxWidth:250, className:''}).openPopup();
+        });
+      })(m, p);
+      batch.push(m);
+      allMarkers.push({m:m, p:p});
+    }
+    cluster.addLayers(batch);
+    var pct = 10 + Math.round((i / total) * 85);
+    document.getElementById('lb').style.width = pct + '%';
+    document.getElementById('ls').textContent = 'Placing parcels… ' + i.toLocaleString() + ' / ' + total.toLocaleString();
+    if (i < total) {
+      setTimeout(addChunk, 8);
+    } else {
+      map.addLayer(cluster);
+      document.getElementById('lb').style.width = '100%';
+      var el = document.getElementById('loading');
+      el.style.opacity = '0';
+      setTimeout(function(){ el.style.display='none'; }, 500);
+      updateStats();
+    }
+  }
+  addChunk();
+
+  map.on('moveend zoomend', updateStats);
+
+  // Zoom: bigger dots when zoomed in
+  map.on('zoomend', function() {
+    var z = map.getZoom();
+    var r = z >= 17 ? 7 : z >= 15 ? 5 : z >= 13 ? 4 : 3;
+    allMarkers.forEach(function(item){ item.m.setRadius(r); });
+  });
+
+  document.getElementById('search-input').addEventListener('keydown', function(e) {
+    if (e.key !== 'Enter') return;
+    var q = this.value.trim();
+    var found = null;
+    for (var j = 0; j < PARCEL_DATA.length; j++) {
+      if (PARCEL_DATA[j][0] === q) { found = PARCEL_DATA[j]; break; }
+    }
+    if (found) {
+      this.style.borderColor = '';
+      map.setView([found[1], found[2]], 18);
+      showDetail(found);
+    } else {
+      this.style.borderColor = '#e85a4a';
+      setTimeout(function(){ document.getElementById('search-input').style.borderColor=''; }, 1200);
+    }
+  });
+}
+
+var s = document.createElement('script');
+s.src = 'parcel_data.js';
+s.onload  = function(){ initMap(); };
+s.onerror = function(){
+  document.getElementById('ls').textContent = '⚠ Error: parcel_data.js not found in same folder.';
+};
+document.head.appendChild(s);
+</script>
+</body>
+</html>
