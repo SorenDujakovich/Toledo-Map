@@ -302,7 +302,6 @@ var cluster, map;
 var parcelById = {};   // O(1) parcel lookup
 var allParcels = [];   // raw array for in-view counting
 var nGreen = 0, nRed = 0, nGrey = 0;
-var canvasRenderer;
 
 function fmt(n) {
   if (n == null || n === 0) return '$0.00';
@@ -472,7 +471,6 @@ function initMap() {
   map = L.map('map', {
     center: [41.6663, -83.5883],
     zoom: 12,
-    preferCanvas: true,
     zoomAnimation: true,
     fadeAnimation: false
   });
@@ -482,9 +480,6 @@ function initMap() {
     updateWhenIdle: true,
     keepBuffer: 1
   }).addTo(map);
-
-  // Single shared canvas renderer for all 137k markers
-  canvasRenderer = L.canvas({ padding: 0.3 });
 
   // ONE cluster group (filter feature removed)
   cluster = L.markerClusterGroup({
@@ -507,14 +502,12 @@ function initMap() {
       var cat = lib > 0.01 ? 'red' : lib < -0.01 ? 'green' : 'grey';
       var col = libColorByCat(cat);
       var m = L.circleMarker([p[1], p[2]], {
-  renderer: canvasRenderer,
   radius: 4,
-  fillColor: col, color: col,
-  weight: 1,           // 1px outline expands clickable area
-  opacity: 0,          // outline invisible
-  fillOpacity: 0.85,
-  interactive: true,
-  bubblingMouseEvents: false
+  fillColor: col,
+  color: col,
+  weight: 1,
+  opacity: 0,
+  fillOpacity: 0.85
 });
       m._parcel = p;
       m._cat = cat;     // used by cluster icon function
